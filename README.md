@@ -1,2 +1,2 @@
 # Tachidesk-preview
-This repository hold the latest build of [Tachidesk](https://github.com/Suwayomi/Tachidesk).
+This repository holds the latest build of [Tachidesk](https://github.com/Suwayomi/Tachidesk).
