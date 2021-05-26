@@ -1,0 +1,84 @@
+name: Build Preview Docker Image
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+env:
+  build_owner: 'suwayomi'
+  build_repo_docker: 'tachidesk'
+  startup_script_preview_url: 'https://raw.githubusercontent.com/suwayomi/tachidesk-preview/main/docker/startup_script.sh'
+  build_base_image_alpine: 'alpine:latest'
+  build_base_image_alpine_platform: 'linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64/v8,linux/ppc64le,linux/s390x'
+  
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: "!startsWith(github.event.head_commit.message, '[SKIP CI]')"
+    steps:
+      - name: Cancel previous runs
+        uses: styfle/cancel-workflow-action@0.5.0
+        with:
+          access_token: ${{ github.token }}
+    
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          ref: main
+          path: main
+          fetch-depth: 0
+          
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v1 
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: get latest release metadata
+        id: get_latest_release_metadata
+        run: |
+          cd master
+          preview_tag=$(curl -s https://api.github.com/repos/Suwayomi/Tachidesk-preview/releases/latest | egrep -o "tag_name.*.v[0-9]+.[0-9]+.[0-9]+-r[0-9]+" | egrep -o "v[0-9]+.[0-9]+.[0-9]+-r[0-9]+")
+          preview_url=$(curl -s https://api.github.com/repos/Suwayomi/Tachidesk-preview/releases/latest | egrep -o "https://.*.download/$preview_tag/Tachidesk-$preview_tag.jar")
+          preview_var=$(echo $preview_url | grep -o "Tachidesk-$preview_tag.jar" | grep -o "$preview_tag" )
+          preview_commit=$(echo $preview_var | cut -f2 -d"r")
+          preview_filename=Tachidesk-${preview_var}.jar
+          preview_version=$(echo $preview_tag | cut -c2-)
+          echo "::set-output name=preview_url::$preview_url"
+          echo "::set-output name=preview_commit::$preview_commit"
+          echo "::set-output name=preview_tag::$preview_tag"
+          echo "::set-output name=preview_filename::$preview_filename"
+          echo "::set-output name=preview_version::$preview_version"
+          echo "::set-output name=preview_var::$preview_var"
+          build_date=$(date "+%F")
+          echo "::set-output name=build_date::$build_date"
+          
+      - name: Build and push preview alpine
+        id: docker_build_preview_alpine
+        uses: docker/build-push-action@v2
+        with:
+          file: docker/Git_Actions-Dockerfile
+          platforms: ${{ env.build_base_image_alpine_platform }}
+          push: true
+          build-args: |
+            BASE_IMAGE=${{ env.build_base_image_alpine }}
+            BUILD_DATE=${{ steps.get_latest_release_metadata.outputs.build_date }}
+            IMAGE_VERSION=${{ steps.get_latest_release_metadata.outputs.preview_version }}
+            IMAGE_TYPE=preview-alpine
+            TACHIDESK_GIT_COMMIT=${{ steps.get_latest_release_metadata.outputs.preview_commit }}
+            TACHIDESK_RELEASE_TAG=${{ steps.get_latest_release_metadata.outputs.preview_tag }}
+            TACHIDESK_RELEASE_DOWNLOAD_URL=${{ steps.get_latest_release_metadata.outputs.preview_url }}
+            TACHIDESK_FILENAME=${{ steps.get_latest_release_metadata.outputs.preview_filename }}
+            STARTUP_SCRIPT_URL=${{ env.startup_script_preview_url }}
+          tags: |
+            ghcr.io/${{ env.build_owner }}/${{ env.build_repo_docker }}:preview
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache
