@@ -45,7 +45,7 @@ jobs:
       - name: get latest release metadata
         id: get_latest_release_metadata
         run: |
-          cd master
+          cd main
           preview_tag=$(curl -s https://api.github.com/repos/Suwayomi/Tachidesk-preview/releases/latest | egrep -o "tag_name.*.v[0-9]+.[0-9]+.[0-9]+-r[0-9]+" | egrep -o "v[0-9]+.[0-9]+.[0-9]+-r[0-9]+")
           preview_url=$(curl -s https://api.github.com/repos/Suwayomi/Tachidesk-preview/releases/latest | egrep -o "https://.*.download/$preview_tag/Tachidesk-$preview_tag.jar")
           preview_var=$(echo $preview_url | grep -o "Tachidesk-$preview_tag.jar" | grep -o "$preview_tag" )
